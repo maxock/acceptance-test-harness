@@ -86,23 +86,7 @@ public class CapybaraPortingLayerImpl implements CapybaraPortingLayer {
     @Override
     public void clickButton(String text) {
         WebElement e = find(by.button(text));
-        /*
-         * YUI sticky buttons present some problems when scroll to them, also if you have a sticky button
-         * you should not need to scroll to use them
-         */
-        boolean isStickyButton = false;
-        WebElement stickyContainer = getElement(by.id("bottom-sticker"));
-        if (stickyContainer != null) {
-            JavascriptExecutor je = (JavascriptExecutor)driver;
-            isStickyButton = (boolean)je.executeScript("return arguments[0].contains(arguments[1])", stickyContainer, e);
-        }
-        if (isStickyButton) {
-            Actions builder = new Actions(driver);
-            builder.moveToElement(e).click(e);
-            builder.perform();
-        } else {
-            e.click();
-        }
+        e.click();
     }
 
     /**

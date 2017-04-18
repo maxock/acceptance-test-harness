@@ -2,20 +2,12 @@ package core;
 
 import org.jenkinsci.test.acceptance.junit.AbstractJUnitTest;
 import org.jenkinsci.test.acceptance.junit.Wait;
-import org.jenkinsci.test.acceptance.po.Artifact;
-import org.jenkinsci.test.acceptance.po.ArtifactArchiver;
-import org.jenkinsci.test.acceptance.po.Build;
-import org.jenkinsci.test.acceptance.po.BuildWithParameters;
-import org.jenkinsci.test.acceptance.po.FreeStyleJob;
-import org.jenkinsci.test.acceptance.po.Job;
-import org.jenkinsci.test.acceptance.po.ListView;
-import org.jenkinsci.test.acceptance.po.ShellBuildStep;
-import org.jenkinsci.test.acceptance.po.StringParameter;
-import org.jenkinsci.test.acceptance.po.TimerTrigger;
+import org.jenkinsci.test.acceptance.po.*;
 import org.junit.Test;
 import org.jvnet.hudson.test.Issue;
 import org.openqa.selenium.By;
 import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.WebElement;
 
 import java.net.URL;
 import java.util.Collections;
@@ -25,10 +17,8 @@ import java.util.regex.Pattern;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.Matchers.equalTo;
-import static org.jenkinsci.test.acceptance.Matchers.containsRegexp;
-import static org.jenkinsci.test.acceptance.Matchers.hasContent;
-import static org.jenkinsci.test.acceptance.Matchers.pageObjectDoesNotExist;
-import static org.jenkinsci.test.acceptance.Matchers.pageObjectExists;
+import static org.hamcrest.Matchers.is;
+import static org.jenkinsci.test.acceptance.Matchers.*;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
@@ -188,6 +178,112 @@ public class FreestyleJobTest extends AbstractJUnitTest {
         assertThat(first.getConsole(), containsString("Started by timer"));
 
         assertThat(j.build(3), pageObjectDoesNotExist());
+    }
+
+    @Test
+    public void descriptionTest() throws Exception {
+        FreeStyleJob j = jenkins.jobs.create(FreeStyleJob.class);
+        // description ruft schon configure() und save() auf
+        j.description("This is a description", false);
+
+// eig schaut man dann in den divs nach
+        assertThat(driver, hasContent("This is a description"));
+
+
+    }
+    //Muster
+    @Test
+    public void should_set_description() throws Exception {
+        FreeStyleJob job = jenkins.jobs.create(FreeStyleJob.class);
+        // die methode gibts bei uns noch ned
+        //job.edit(() -> job.setDescription("A description"));
+
+        // xpaht problem mit sprache, wenn man auf texte geht, bei id's kein porblem
+        WebElement actual = job.find(By.xpath("//div[@id='description']/div"));
+        assertThat(actual.getText(), containsString("A description"));
+    }
+    // Muster
+    @Test
+    public void should_show_permalink_last_build() {
+        FreeStyleJob job = jenkins.jobs.create(FreeStyleJob.class);
+
+        String last = "Last build (#1)";
+        assertThat(driver, not(hasContent(last)));
+
+        job.scheduleBuild().waitUntilFinished();
+        job.open();
+        assertThat(driver, hasContent(last));
+    }
+    // Muster
+    @Test
+    public void should_visit_build_with_permalink() {
+        FreeStyleJob job = jenkins.jobs.create(FreeStyleJob.class);
+
+        Build build = job.scheduleBuild().shouldSucceed();
+        job.open();
+        //Sucht auf seite nach link, der so beginnt --> deswegen partialLink
+        WebElement link = job.find(By.partialLinkText("Last build (#1)"));
+        link.click();
+
+        assertThat(driver, hasContent("Build #1"));
+        assertThat(driver, hasContent("No changes"));
+
+        WebElement successIcon = build.find(By.xpath("//h1/img"));
+        assertThat(successIcon.getAttribute("tooltip"), is("Success"));
+    }
+
+    @Test
+    public void permalinkTest() throws Exception {
+        FreeStyleJob j = jenkins.jobs.create(FreeStyleJob.class);
+        j.save();
+
+        j.scheduleBuild().waitUntilFinished();
+
+        j.open();
+
+        // eig schaut man dann in den divs nach
+        assertThat(driver, hasContent("Last build"));
+        assertThat(driver, hasContent("Last stable build"));
+        assertThat(driver, hasContent("Last successful build"));
+        assertThat(driver, hasContent("Last completed build"));
+
+    }
+
+    @Test
+    public void extendedPermalinkTest() throws Exception {
+        FreeStyleJob j = jenkins.jobs.create(FreeStyleJob.class);
+        j.save();
+
+        Build build = j.scheduleBuild().waitUntilFinished();
+
+        // War der build erfolgreich?
+        build.shouldSucceed();
+
+        build.open();
+        assertThat(driver, hasContent("Build #1"));
+        assertThat(driver, hasContent("No changes"));
+    }
+    // Muster
+    @Test
+    public void should_user_upstream_trigger() {
+        FreeStyleJob main = jenkins.jobs.create(FreeStyleJob.class);
+        FreeStyleJob trigger = jenkins.jobs.create(FreeStyleJob.class);
+
+        main.edit(() -> {
+            UpstreamJobTrigger configuration = main.addTrigger(UpstreamJobTrigger.class);
+            configuration.setUpstreamProjects(trigger.name);
+        });
+
+        Build build = trigger.scheduleBuild().shouldSucceed();
+        //Formated containsSring() gibs noch ned
+        //assertThat(build.getConsole(), containsString("Triggering a new build of %s", main.name));
+        assertThat(build.getConsole(), containsString("Triggering a new build of " + main.name));
+
+        Build automaticallyStartedBuild = main.build(1);
+        automaticallyStartedBuild.waitUntilFinished();
+
+        assertThat(automaticallyStartedBuild.getConsole(), containsString("Started by upstream project \"" + trigger.name + "\""));
+        //assertThat(automaticallyStartedBuild.getConsole(), containsString("Started by upstream project \"%s\"", trigger.name));
     }
 
     @Test
